@@ -1,0 +1,44 @@
+.terminal-alert {
+  border-left: 4px solid var(--tp-accent);
+  background: rgba(12, 16, 26, 0.9);
+  padding: 0.8rem 1rem;
+  margin: 1.2rem 0;
+  border-radius: 0.4rem;
+  box-shadow: inset 0 0 0 1px rgba(50, 200, 255, 0.15);
+}
+
+.terminal-alert-error {
+  border-left-color: #ff6b6b;
+  box-shadow: inset 0 0 0 1px rgba(255, 107, 107, 0.35);
+}
+
+.terminal-alert-primary {
+  border-left-color: #7d5cff;
+  box-shadow: inset 0 0 0 1px rgba(125, 92, 255, 0.35);
+}
+
+.terminal-alert > .admonition-title {
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--tp-accent-secondary);
+}
+
+.terminal-alert > .admonition-title::before {
+  margin-right: 0.4rem;
+}
+
+.md-typeset .admonition.terminal-alert p {
+  color: var(--tp-text);
+}
+
+.md-typeset .admonition.terminal-alert code {
+  border: none;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.md-typeset .admonition.terminal-alert a {
+  color: var(--tp-accent);
+  text-decoration: underline;
+}
