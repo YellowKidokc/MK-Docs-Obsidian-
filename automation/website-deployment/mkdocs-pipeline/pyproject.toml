@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=62"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "theophysics-mkdocs-pipeline"
+version = "0.1.0"
+description = "MkDocs build helpers for the Theophysics research platform"
+authors = [{ name = "David Lowe" }]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["pyyaml>=6.0"]
+
+[project.entry-points."mkdocs.plugins"]
+tags = "mkdocs_pipeline.tags:TagsPlugin"

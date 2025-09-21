@@ -1,7 +1,9 @@
-mkdocs>=1.5.0
-mkdocs-material>=9.0.0
+mkdocs>=1.6.0
 pymdown-extensions>=10.0.0
-mkdocs-roamlinks-plugin>=0.2.1
-mkdocs-mermaid2-plugin>=1.0.0
-mkdocs-callouts>=1.9.0
-mkdocs-glightbox>=0.3.4
+mkdocs-material>=9.5.0
+mkdocs-macros-plugin>=1.0.4
+mkdocs-awesome-pages-plugin>=2.9.2
+mkdocs-minify-plugin>=0.7.1
+mkdocs-git-revision-date-plugin>=0.3.2
+pyyaml>=6.0
+-e automation/website-deployment/mkdocs-pipeline
