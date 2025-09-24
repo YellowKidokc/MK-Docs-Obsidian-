@@ -1,0 +1,6 @@
+__pycache__/
+obsidian-vault/published/
+*.pyc
+
+*.egg-info/
+.venv/

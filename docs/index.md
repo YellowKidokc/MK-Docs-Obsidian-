@@ -1,27 +1,54 @@
----
-share: true
-title: "THEOPHYSICS Research Hub"
----
+# Theophysics MkDocs Pipeline
 
-# THEOPHYSICS Research Hub
+This repository provides a complete automation stack for generating three
+independent MkDocs sites from a single Obsidian vault.  The solution is
+optimised for David Lowe's research workflow and mirrors the live
+Cloudflare Pages deployment (`theophysics.pages.dev`,
+`theophysics-template.pages.dev`, `theophysics-blog.pages.dev`).
 
-## Welcome to Breakthrough Physics Research
+## Key Features
 
-This research hub documents groundbreaking discoveries in the intersection of quantum mechanics, consciousness studies, and biblical prophecy.
+- YAML frontmatter controls which notes are published to each site.
+- Lantana-inspired dark theme blended with Terminal UI accents.
+- Advanced markdown support including PyMdown extensions and callouts.
+- HTML5 audio/video embedding with playlists and download links.
+- Automatic conversion of `[[wikilinks]]` and attachment management.
+- Absolute media references are ingested safely by copying them into each
+  MkDocs build, so external audio or video files remain playable.
+- Macros, search, tags, and minified output for every generated site.
 
-## Key Research Areas
+## Repository Structure
 
-### 🔬 THEOPHYSICS Framework
-Dual-domain physics exploring the interface between General Relativity (Order) and Quantum Mechanics (Chaos).
+```text
+obsidian-vault/
+├── research-notes/           # Source markdown notes from Obsidian
+├── templates/                # Optional Obsidian templates
+├── automation/               # Existing deployment logic
+└── published/                # MkDocs build targets (generated)
+```
 
-### 🧠 Quantum-Consciousness Interface
-Evidence-based research on consciousness as a quantum phenomenon, building on PEAR Laboratory's 6σ statistical evidence.
+Automation assets live under
+`automation/website-deployment/mkdocs-pipeline` and include the builder,
+custom theme overrides, and static assets.
 
-### 📖 Biblical Prophecy Correlation
-Rigorous analysis showing statistical correlation between quantum decoherence acceleration and biblical prophecy timelines.
+## Usage
 
----
+```bash
+python automation/website-deployment/mkdocs-pipeline/build.py --verbose
+```
 
-*"The boundary between physics and metaphysics is dissolving, revealing a deeper unity underlying all reality."*
+The command scans the vault, materialises three MkDocs projects inside
+`obsidian-vault/published/`, and preserves the directory layout expected
+by the Cloudflare Pages deployments.
 
-**David Carter** | THEOPHYSICS Research | Oklahoma City, 2025
+Pass `--site production`, `--site research`, or `--site template` to
+build a single site.  Add `--clean` to remove previous builds.
+
+## Next Steps
+
+1. Copy your live Obsidian vault into `obsidian-vault/`.
+2. Adjust the site metadata in `build.py` if URLs or palettes change.
+3. Run the build script and then the existing deployment workflow under
+   `obsidian-vault/automation/website-deployment`.
+4. Customise CSS/JS in `automation/website-deployment/mkdocs-pipeline` as
+   needed for further branding.
