@@ -3244,3 +3244,1604 @@ Acceptance Tests:
 - Budget overflow halts safely
 - Dry-run deterministic for same inputs
 - Transcript JSONL well-formed
+
+
+If you want, I can also generate a compact version (one page) or a Markdown file you can drop into your repo as ENGINEERING_PROMPT.md.
+
+You said:
+bsidian MkDocs Preflight Toolkit
+
+
+
+
+7m ago
+4m ago
+
+Always show details
+# Create a minimal, runnable preflight/normalization toolkit for your Obsidian → MkDocs pipeline.
+# It validates/coerces your YAML template, extracts inline #tags from body into frontmatter,
+# enforces default publish_to (template/research/production), and writes a report.
+from pathlib import Path
+from textwrap import dedent
+import json, re, shutil
+
+root = Path("/mnt/data/ObsidianPipelineStarter")
+(root / "vault").mkdir(parents=True, exist_ok=True)
+(root / "pipeline").mkdir(parents=True, exist_ok=True)
+(root / "reports").mkdir(parents=True, exist_ok=True)
+
+# Sample note using your template (with Obsidian Templater placeholders left intact)
+sample_note = dedent("""
+---
+# Publishing Control
+share: <% tp.system.suggester(["Yes - Publish to website", "No - Keep private"], ["true", "false"]) %>
+publish: true
+
+# Core Metadata
+title: "<% tp.file.title %>"
+description: "<% await tp.system.prompt("Brief description (or leave blank for AI to generate)") %>"
+author: "David Lowe"
+date: <% tp.date.now("YYYY-MM-DD") %>
+updated: <% tp.date.now("YYYY-MM-DD") %>
+
+# AI Labeling Prompt
+ai_analysis_prompt: |
+  Please analyze this research note and suggest:
+  1. Appropriate tags from: theophysics, quantum-consciousness, bible-prophecy, foundation-crisis, entangled-soul, universal-laws, decoherence, consciousness-interface, end-times, pear-data
+  2. Research framework: Quantum-Consciousness-Prophecy, 10 Universal Laws, THEOPHYSICS, or Entangled Soul Theory
+  3. Significance level: paradigm-shifting, breakthrough, important, supporting, or preliminary
+  4. Prophecy correlation: high, medium, low, or none
+  5. Consciousness relevance: critical, important, relevant, or none
+  6. Keywords for SEO
+  7. Brief description/excerpt
+  Content to analyze: "<% tp.file.content %>"
+
+# Categorization (AI will fill these)
+tags: 
+  - AI-will-tag
+categories:
+  - AI-will-categorize
+type: AI-will-determine
+
+# Research Framework (AI will suggest)
+framework: AI-will-determine
+significance: AI-will-assess
+
+# Academic Metadata
+draft: false
+version: "1.0"
+
+# SEO & Discovery (AI will enhance)
+keywords: ["AI-will-suggest-keywords"]
+slug: ""
+
+# Display Options
+math: true
+mermaid: false
+toc: true
+comments: true
+
+# Custom Properties (AI will evaluate)
+breakthrough_level: "AI-will-assess"
+prophecy_correlation: "AI-will-assess"
+consciousness_relevance: "AI-will-assess"
+bible_refs: ["AI-will-extract"]
+
+# Workflow
+status: "active"
+priority: "high"
+
+# AI Processing Flag
+ai_labeling_needed: true
+ai_processed: false
+publish_to:
+  production: false
+  research: true
+  template: false
+---
+
+# Sample Note
+
+This is a sample. Inline tags: #theophysics #quantum-consciousness #customTag
+And a missing image: ![[missing.png]]
+""").strip()
+
+(root / "vault" / "Sample Note.md").write_text(sample_note, encoding="utf-8")
+
+
+# Preflight/normalize script
+preflight = dedent(r"""
+#!/usr/bin/env python3
+"""
+Preflight/normalize Obsidian notes:
+- Parse frontmatter (YAML-like) using a tolerant parser (no external deps).
+- Coerce your schema (defaults, booleans, lists).
+- Extract inline #tags from body → merge into frontmatter.tags (dedup, sorted).
+- Optionally strip inline hashtags from body (controlled by --strip-inline-tags).
+- Ensure publish_to defaults (if none given, set template True by default OR via --default-site).
+- Detect missing assets referenced by ![[...]] or markdown images and list them in a JSON report.
+- Write normalized notes into ./normalized/ (safe, non-destructive).
+- Emit reports/report.json with per-file status.
+""") + dedent(r"""
+import argparse, json, re, os
+from pathlib import Path
+
+FM_BOUND = re.compile(r'^---\s*$')
+HASH_TAG = re.compile(r'(?<![\w/])#([A-Za-z0-9][\w\-\/]*)')
+WIKILINK_IMG = re.compile(r'!\[\[(.+?)\]\]')
+MD_IMG = re.compile(r'!\[[^\]]*\]\(([^)]+)\)')
+
+def parse_frontmatter(text: str):
+    lines = text.splitlines()
+    if not lines or not FM_BOUND.match(lines[0]):
+        return {}, text
+    fm_lines = []
+    i = 1
+    while i < len(lines):
+        if FM_BOUND.match(lines[i]):
+            break
+        fm_lines.append(lines[i])
+        i += 1
+    body = "\n".join(lines[i+1:]) if i+1 < len(lines) else ""
+    fm = {}
+    # extremely tolerant parser: key: value; lists with '-' entries; no nested maps except publish_to
+    current_key = None
+    for raw in fm_lines:
+        line = raw.rstrip()
+        if not line.strip():
+            continue
+        if re.match(r'^[A-Za-z0-9_\-]+:\s*(.*)$', line):
+            key, val = line.split(':', 1)
+            key = key.strip()
+            val = val.strip()
+            if val == "":
+                fm[key] = ""
+            else:
+                fm[key] = val.strip('"\'')
+            current_key = key
+        elif line.strip().startswith('- '):
+            if current_key and isinstance(fm.get(current_key), list):
+                fm[current_key].append(line.strip()[2:].strip())
+            else:
+                fm[current_key] = [line.strip()[2:].strip()]
+        elif line.strip().endswith(':') and not line.strip().startswith('-'):
+            current_key = line.strip()[:-1]
+            fm[current_key] = {}
+        elif current_key and isinstance(fm.get(current_key), dict):
+            # nested kv for dictionaries like publish_to:
+            if ':' in line:
+                k, v = line.split(':', 1)
+                fm[current_key][k.strip()] = v.strip().strip('"\'')
+    return fm, body
+
+def coerce_schema(fm: dict, default_site: str):
+    # publish_to defaulting
+    pub = fm.get('publish_to')
+    if not isinstance(pub, dict):
+        pub = {}
+    if default_site not in ('template','research','production'):
+        default_site = 'template'
+    pub.setdefault('template', default_site == 'template')
+    pub.setdefault('research', default_site == 'research')
+    pub.setdefault('production', default_site == 'production')
+    fm['publish_to'] = {k: bool(str(v).lower()=='true' if isinstance(v,str) else v) for k,v in pub.items()}
+
+    # tags: coerce to list
+    tags = fm.get('tags', [])
+    if isinstance(tags, str):
+        tags = [t.strip() for t in tags.split(',') if t.strip()]
+    if not isinstance(tags, list):
+        tags = []
+    fm['tags'] = tags
+
+    # booleans
+    for b in ['draft','math','mermaid','toc','comments','ai_labeling_needed','ai_processed']:
+        if b in fm:
+            val = fm[b]
+            if isinstance(val, str):
+                fm[b] = val.strip().lower() == 'true'
+            else:
+                fm[b] = bool(val)
+    return fm
+
+def extract_inline_tags(body: str):
+    return sorted(set(HASH_TAG.findall(body)))
+
+def strip_inline_tags(body: str):
+    return HASH_TAG.sub('', body)
+
+def find_assets(body: str):
+    assets = []
+    assets += WIKILINK_IMG.findall(body)
+    assets += MD_IMG.findall(body)
+    return assets
+
+def dump_frontmatter(fm: dict):
+    lines = ['---']
+    for k, v in fm.items():
+        if isinstance(v, dict):
+            lines.append(f"{k}:")
+            for k2, v2 in v.items():
+                sval = 'true' if v2 is True else 'false' if v2 is False else v2
+                lines.append(f"  {k2}: {sval}")
+        elif isinstance(v, list):
+            lines.append(f"{k}:")
+            for item in v:
+                lines.append(f"  - {item}")
+        else:
+            sval = 'true' if v is True else 'false' if v is False else v
+            lines.append(f"{k}: {sval}")
+    lines.append('---')
+    return "\n".join(lines)
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--vault", default="vault", help="Path to Obsidian vault")
+    ap.add_argument("--out", default="normalized", help="Normalized output dir")
+    ap.add_argument("--default-site", default="template", choices=["template","research","production"])
+    ap.add_argument("--strip-inline-tags", action="store_true")
+    args = ap.parse_args()
+
+    vault = Path(args.vault)
+    out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
+    report = {"files": []}
+
+    for md in vault.rglob("*.md"):
+        fm, body = parse_frontmatter(md.read_text(encoding='utf-8'))
+        fm = coerce_schema(fm, default_site=args.default_site)
+
+        inline_tags = extract_inline_tags(body)
+        fm['tags'] = sorted(set(fm.get('tags', []) + inline_tags))
+
+        missing_assets = []
+        assets = find_assets(body)
+        for a in assets:
+            apath = (md.parent / a).resolve()
+            if not apath.exists():
+                missing_assets.append(a)
+
+        if args.strip_inline_tags:
+            body = strip_inline_tags(body)
+
+        new_text = dump_frontmatter(fm) + "\n\n" + body.strip() + "\n"
+        out_path = out / md.relative_to(vault)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(new_text, encoding='utf-8')
+
+        report["files"].append({
+            "path": str(md.relative_to(vault)),
+            "tags": fm.get("tags", []),
+            "publish_to": fm.get("publish_to", {}),
+            "missing_assets": missing_assets
+        })
+
+    Path("reports").mkdir(exist_ok=True)
+    (Path("reports") / "report.json").write_text(json.dumps(report, indent=2), encoding='utf-8')
+    print(f"Processed {len(report['files'])} files. Report at reports/report.json")
+
+if __name__ == "__main__":
+    main()
+""")
+
+(root / "pipeline" / "preflight.py").write_text(preflight, encoding="utf-8")
+
+readme = dedent("""
+# Obsidian Pipeline Starter
+
+Run a **safe preflight** on your vault to normalize frontmatter, collect inline #tags , and set default publish_to  site.
+
+## Quick start
+
+bash
+cd ObsidianPipelineStarter
+python3 pipeline/preflight.py --vault vault --out normalized --default-site research --strip-inline-tags
+
+--default-site can be template|research|production (you asked for research as default).
+The script writes normalized notes to normalized/ and a JSON report at reports/report.json:
+per-file tags (merged YAML + inline),
+publish_to flags,
+missing assets.
+You can point --vault to your O:\ iSCSI path or to your dev copy; output is non-destructive.
+""")
+(root / "README.md").write_text(readme, encoding="utf-8")
+root.as_posix()
+Always show details
+Locked in. Here’s a concrete plan + a runnable starter so you can test your YAML flow today, default to published research, and keep tags out of the reading flow while still linking them correctly.
+Concise insight
+Use a Python preflight normalizer in front of MkDocs: it parses your frontmatter, defaults publish_to.research: true, extracts inline #tags into YAML (optionally stripping them from the body), rewrites nothing else, and emits a JSON report of missing assets/oddities. This de-risks uploads and gives you deterministic inputs to MkDocs/Material.
+
+
+What I generated for you (ready now)
+Folder: ObsidianPipelineStarter
+vault/Sample Note.md – your YAML template style, as a sample.
+pipeline/preflight.py – the preflight/normalization script.
+reports/ – where the JSON report goes.
+normalized/ – where cleaned notes are written.
+README.md – quick instructions.
+Download:
+ObsidianPipelineStarter
+Run preflight:
+python pipeline/preflight.py --vault vault --out normalized --default-site research --strip-inline-tags
+
+Swap --vault for your real vault path (can be your O: iSCSI drive). The script is non-destructive—it writes to normalized/ and a report to reports/report.json.
+What the preflight does
+Parses frontmatter (tolerant parser; no external deps).
+Coerces your schema:
+Ensures publish_to exists and sets research: true by default (configurable).
+Normalizes booleans and list fields.
+Merges inline tags: grabs #tags from the body → merges into tags: in YAML (deduped, sorted). With --strip-inline-tags, it removes the hashtags from the rendered body so they don’t interrupt reading.
+Finds missing assets: lists broken ![[...]] and Markdown image refs in the report instead of failing the build.
+Outputs JSON report: for each file—path, resolved tags, publish flags, missing assets.
+This directly addresses your pain points: uploads that “always break something,” emojis/odd fields, missing images, and “publish template vs research” defaults.
+
+
+Your YAML template (kept, with two tweaks)
+You can keep your Templater directives as-is. Two small adjustments I recommend for stability:
+Add a publish_to block explicitly (even if defaults handle it); you want clarity:
+publish_to:
+  production: false
+  research: true     # <- your new default
+  template: false
+
+Leave slug: "" and let the pipeline set/normalize later (or add a stable uid if you want rename-safe URLs later).
+Everything else (AI labels/flags, categories) can stay; the preflight doesn’t touch those keys beyond type coercion.
+
+
+Tags “crazy but clean”
+Preflight collects all inline #tags and merges them into YAML.
+With --strip-inline-tags, those hashtags are removed from the body so readers don’t see noise; links and tag lists still exist in YAML for MkDocs plugins/search.
+You can keep adding rich tags; the pipeline de-duplicates and sorts them.
+
+
+Where to keep the vault (O: iSCSI vs dev drive)?
+O: iSCSI (live Obsidian): fine. Point --vault at O:\Path\To\Vault. The script reads and writes to a separate --out folder, so your live vault isn’t altered.
+Dev drive copy: safer if you plan heavy transforms or bulk promotions.
+Recommendation: keep authoring on O:; run preflight against O: and write to an out folder on your dev drive (fast SSD). MkDocs builds from that normalized folder.
+
+
+Next steps toward MkDocs/Material + Cloudflare
+Add a second script build.py that:
+Calls preflight.py to produce normalized/.
+Splits/filters into sites (template/research/production) using the publish_to flags.
+Writes per-site mkdocs.yml and copies assets.
+Runs mkdocs build per site.
+Use Material for MkDocs with a neutral palette (we’ll avoid the site/colors you disliked). Add theophysics.css for branding overrides.
+Cloudflare Pages build command (reliable):
+git fetch --unshallow || true
+pip install -r requirements.txt
+python pipeline/build.py --site research
+
+(Repeat for other sites or support --site all.)
+I can produce the build.py scaffold and MkDocs templates next if you want.
+
+
+Quick promote/demote flow
+Later, add promote.py:
+python pipeline/promote.py --query 'tag:paper' --to production
+
+It edits frontmatter in the normalized copy (or via a vault-aware mode) flipping publish_to.production: true.
+
+
+Sanity checklist for Codex
+treat frontmatter tolerantly (coerce, default, warn; never hard fail for a single note).
+never mutate the original vault; write to normalized/.
+maintain a report with all warnings (tags added, missing assets, non-ASCII filenames, etc.).
+default site = research (as you asked); override with --default-site.
+Want me to generate the build.py + MkDocs config templates now (so you can do a full local build into a basic Material site)?
+
+You said:
+OK so I'm going to I guess I'm going to pre run the Python script to try to clean everything out and then we'll give everything to codex and see if he can if he can yeah take care of all this right And hopefully this won't work I guess I don't know
+ChatGPT said:
+Exactly — the preflight script is the right first move. Run it against your vault and you’ll quickly see what’s “clean” and what Codex would otherwise choke on:
+It merges inline tags into YAML.
+It strips inline hashtags (if you want).
+It sets publish_to.research: true by default.
+It reports broken image/audio/video links.
+It never mutates your original vault, only writes to normalized/.
+Suggested workflow for you
+Point it at your vault (on O: or your dev drive)
+Example:
+python pipeline/preflight.py --vault "O:/TheophysicsVault" --out normalized --default-site research --strip-inline-tags
+
+(On Linux/Mac replace O:/ with the mounted path.)
+Inspect the report
+Check reports/report.json. It lists per file:
+merged tags,
+publish flags,
+missing assets.
+Look at the normalized notes
+In normalized/ you’ll see frontmatter cleaned and consistent. That’s what you hand to Codex or plug into MkDocs.
+Next hand-off to Codex
+Once you’re happy, Codex gets a deterministic vault copy, with YAML normalized and all the “tricky stuff” (emojis, bad booleans, missing fields) already stabilized. That way he can focus on building the MkDocs pipeline + Cloudflare deploy logic, not fighting messy inputs.
+
+
+⚖️ O: drive vs dev drive
+If your O: iSCSI is fast and stable → safe to use directly as --vault.
+If you want to experiment and not risk anything, copy the vault to your dev drive and run there.
+I’d recommend: author on O:, run preflight into a dev-drive normalized/. That gives you safe separation.
+
+
+👉 Do you want me to now generate the build.py skeleton + MkDocs config templates so you can test a full local site build right after preflight? That would let you go: vault → normalized → mkdocs build → preview site before ever touching Cloudflare.
+You said:
+Really fast Yeah I guess the Theo physics but do I need to create another one for this one like do I need to create another you know I felt like I've been creating so many faults lately with you know all these different repos for Obsidian which it's fine I don't care I just should I do that OK and I'll do it on the development drive You know that that was another thing is when we did do the static site on my computer well actually I never well actually they they they made a basic HTML that says all the steps we should do and what should what what we should expect and that always launched but none of the notes ever did I mean it's really up to you I can see where I mean yeah I definitely could see where it be beneficial because if it does work on my computer it should work on Obsidian you know fairly easy It's really up to you if you think it's worth the time then let's do it and I probably think it is because we failed every other time
+ChatGPT said:
+Thought for 17s
+Analyzed
+Always show details
+# Create a minimal MkDocs starter that points at a normalized/ folder so you can test locally.
+from pathlib import Path
+from textwrap import dedent
+
+base = Path("/mnt/data/TheoMkDocsStarter")
+(base/"normalized").mkdir(parents=True, exist_ok=True)
+
+# Minimal index to prove pages render
+(base/"normalized"/"index.md").write_text("# Theophysics — Local Test\n\nIf you can read this, MkDocs is rendering from normalized/ .\n", encoding="utf-8")
+
+# mkdocs.yml that treats normalized/ as docs_dir
+(base/"mkdocs.yml").write_text(dedent("""
+site_name: Theophysics (Local Preview)
+site_url: http://localhost:8000/
+docs_dir: normalized
+use_directory_urls: true
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.sections
+    - content.code.copy
+    - search.suggest
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.details
+  - pymdownx.critic
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+plugins:
+  - search
+"""), encoding="utf-8")
+
+# requirements
+(base/"requirements.txt").write_text(dedent("""
+mkdocs>=1.6.0
+mkdocs-material>=9.5.0
+pymdown-extensions>=10.8
+"""), encoding="utf-8")
+
+# README
+(base/"README.md").write_text(dedent("""
+# TheoMkDocsStarter
+
+This project serves MkDocs **directly from a normalized/  folder** (produced by your preflight step).
+Use it to confirm pages render locally before pushing to Cloudflare Pages.
+
+## Quick Start
+bash
+python -m venv .venv && . .venv/bin/activate   # Windows: .venv\\Scripts\\activate
+pip install -r requirements.txt
+mkdocs serve
+
+Then open http://127.0.0.1:8000
+Replace content
+Copy your preflight output into normalized/ (replace the sample index.md).
+If your preflight wrote somewhere else, either copy it here or point docs_dir in mkdocs.yml to that path.
+Common reasons "only the basic HTML launches" (no notes shown)
+No index.md at the docs root (MkDocs needs it).
+Wrong docs_dir in mkdocs.yml (default is docs/, but you're using normalized/).
+Nav excludes pages (a strict nav: block that doesn't include your files). Try removing nav: until it renders.
+CI/CD building another folder than the one with your markdown.
+Frontmatter/YAML errors that cause pages to be skipped by plugins; test locally without custom plugins first.
+"""), encoding="utf-8")
+base.as_posix()
+Always show details
+Result
+'/mnt/data/TheoMkDocsStarter'
+Short answer: don’t create another vault. Keep one authoritative Theophysics vault for writing. Do your build + experiments from a separate normalized output folder on your dev drive. That gives you safety and speed without multiplying vaults.
+Here’s the clean workflow that will finally make the local site render notes (not just the boilerplate page):
+What to do
+Run preflight against your real vault (on O: is fine), but write output to dev drive:
+python pipeline/preflight.py --vault "O:/TheophysicsVault" --out "D:/theo-normalized" --default-site research --strip-inline-tags
+
+Original vault remains untouched.
+D:/theo-normalized becomes your deterministic input to MkDocs.
+Preview locally with MkDocs using a minimal, known-good config
+I created a tiny starter that points directly at a normalized/ folder, so you can verify pages render before messing with CI/CD:
+Folder: TheoMkDocsStarter → open
+mkdocs.yml already uses docs_dir: normalized
+normalized/index.md is a placeholder page
+requirements.txt is minimal (no risky plugins)
+Run it:
+cd TheoMkDocsStarter
+python -m venv .venv && . .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+mkdocs serve
+
+Open http://127.0.0.1:8000 — you should see the sample page.
+Swap in your normalized output
+Replace TheoMkDocsStarter/normalized/ with D:/theo-normalized/ (or change docs_dir in mkdocs.yml to point to your normalized path). Refresh the server. Your notes should now render.
+Why your past local builds showed “just the basic HTML”
+Common culprits:
+No index.md at the docs root (MkDocs wants it)
+Wrong docs_dir (MkDocs default is docs/; your content was elsewhere)
+Over-strict nav: that omitted your pages → nothing shows
+Plugins/frontmatter errors causing silent skips → start with the minimal config above, then layer plugins
+Repo / vault strategy
+One vault (Theophysics) for authoring.
+Preflight output (normalized) on dev drive for builds/tests.
+MkDocs/Cloudflare consumes normalized, not the raw vault.
+If you want me to add a build.py that:
+calls preflight,
+splits by publish_to (research/production/template),
+writes per-site mkdocs.yml,
+and runs mkdocs build,
+say the word and I’ll drop that scaffold next so Codex can wire it up.
+
+
+can u start with this code and then we riun it 
+
+
+I'll create the minimal Obsidian → MkDocs preflight toolkit in your workspace, then run the preflight against the included sample vault to verify everything works end-to-end. Creating the files first.
+
+Sample Note.md
+new
++73
+preflight.py
+new
++171
+README.md
+new
++17
+1 more
+2
+Run preflight against sample vault to verify it works
+
+3 more
+I'll run the preflight against the included sample vault to verify everything works and produce a normalized copy and a report. This will execute a local Python script and write results under ObsidianPipelineStarter/normalized/ and ObsidianPipelineStarter/reports/.
+
+…\ObsidianPipelineStarter > python .\pipeline\preflight.py --vault vault --out normalized --default-site research --strip-inline-tags
+
+
+Processed 1 files. Report at reports/report.json
+Exit Code 0
+I’ll open the generated report and the normalized sample file to show results and verify the pipeline output.
+
+2 more
+Display summary of reports/report.json and one normalized file
+
+4
+Provide ready-to-run command targeting user's real vault path on O:
+
+1 more
+Findings
+Normalized output: d:/Obsidian Python scripts/ObsidianPipelineStarter/normalized/Sample Note.md
+Report: d:/Obsidian Python scripts/ObsidianPipelineStarter/reports/report.json
+Tags merged: ["AI-will-tag", "customTag", "quantum-consciousness", "theophysics"] from YAML + inline.
+Publish flags: publish_to: { template: false, research: true, production: false }
+Missing asset detected: missing.png
+Inline tags stripped: Confirmed (body tag text removed due to --strip-inline-tags).
+What I created
+Toolkit at 
+d:/Obsidian Python scripts/ObsidianPipelineStarter/
+vault/Sample Note.md — sample note with your template.
+pipeline/preflight.py
+ — preflight/normalizer.
+README.md
+ — quick instructions.
+normalized/ — output.
+reports/report.json
+ — per-file status.
+Run it on your real vault (Windows PowerShell)
+Recommended: Keep your live Obsidian vault on O:. Output to a dev folder on D: for safety.
+powershell
+# Replace the path below to your real vault root folder (the folder that contains your .md files)
+python "d:\Obsidian Python scripts\ObsidianPipelineStarter\pipeline\preflight.py" 
+  --vault "O:\TheophysicsVault" 
+  --out "D:\theo-normalized" 
+  --default-site research 
+  --strip-inline-tags
+Results:
+Normalized notes at D:\theo-normalized\
+Report at d:\Obsidian Python scripts\ObsidianPipelineStarter\reports\report.json
+If you prefer to keep inline hashtags visible in the body, just remove --strip-inline-tags.
+
+Next optional step: local MkDocs preview
+I can add a minimal MkDocs starter pointing docs_dir to D:\theo-normalized\ so you can run:
+
+powershell
+pip install mkdocs mkdocs-material pymdown-extensions
+mkdocs serve
+This ensures your notes actually render (not just a boilerplate page). Say “add MkDocs starter” and I’ll drop the scaffold.
+
+Summary of task status
+Created the preflight toolkit and sample note.
+Ran preflight on the sample; verified tags, defaults, reporting, and stripping.
+Ready to run against your O: vault with the command above, or proceed to MkDocs starter—your call.
+Feedback submitted
+
+
+Great—these two scripts are useful. Here’s the safest way to use them (and what to tweak) so you don’t repeat the “HTML loads but no notes” spiral.
+TL;DR workflow (safe + fast)
+Close Obsidian. (Avoids file locks and race conditions.)
+Snapshot backup of the vault (folder copy or your script’s --backup).
+Vault Master (Python) — run dry-run/plan only first:
+python theophysics_vault_master.py --vault "O:/THEOPHYSICS" --plan-only --log-dir "D:/vault-plans"
+
+Review vault_plan_*.md and vault_changes_*.csv.
+If you need bulk renames from Excel/CSV, run one rename path:
+Either: Python tool with --excel ... --apply
+Or: PowerShell vault_bulk_rename.ps1 -Vault ... -Excel ... -Apply
+Don’t run both; they’ll double-apply.
+Run Python tool again with YAML + index (still dry-run); if it looks right, apply:
+python theophysics_vault_master.py --vault "O:/THEOPHYSICS" --backup "D:/Backups/Vault_%DATE%" --apply
+
+Preflight-normalize the cleaned vault to a separate folder (dev SSD):
+python pipeline/preflight.py --vault "O:/THEOPHYSICS" --out "D:/theo-normalized" --default-site research --strip-inline-tags
+
+Local preview with the MkDocs starter I gave you:
+Replace TheoMkDocsStarter/normalized/ with D:/theo-normalized/ (or point docs_dir).
+mkdocs serve → verify pages render.
+
+Should you run the extra scripts?
+Yes, but in this order:
+Use Vault Master (Python) as your primary tool (it covers backup, mapping, YAML, indexes, duplicates, link updates).
+Use PowerShell only if you specifically want Excel/CSV renames without the rest of Vault Master’s features—or if you prefer running this on Windows with no Python deps. Do not update links in both tools in the same pass.
+
+Practical cautions (learned the hard way)
+iSCSI (O: drive): thousands of tiny renames can be slow. If latency bites you, copy to a local SSD → process → copy back.
+Case differences (Old vs old) matter on Windows; your scripts should treat wikilinks case-insensitively where feasible.
+Obsidian caches: after large renames, restart Obsidian so it rescans.
+
+Quick improvements (low-risk patches)
+1) Wikilink updates: avoid accidental substrings
+Your Python tool currently does a plain .replace. Use a regex with proper boundaries so [[Old]] in [[Oldest]] isn’t touched.
+Replace in apply_renames_and_update_links:
+for old, new in link_map.items():
+    # [[Old]] -> [[New]]
+    new_txt = re.sub(rf"\[\[{re.escape(old)}\]\]", f"[[{new}]]", new_txt)
+    # [[Old|Label]] -> [[New|Label]]
+    new_txt = re.sub(rf"\[\[{re.escape(old)}\|", f"[[{new}|", new_txt)
+    # Transclusions: ![[Old]] and ![[Old|...]]
+    new_txt = re.sub(rf"!\[\[{re.escape(old)}\]\]", f"![[{new}]]", new_txt)
+    new_txt = re.sub(rf"!\[\[{re.escape(old)}\|", f"[[{new}|", new_txt)
+
+Optionally add flags=re.IGNORECASE if your mapping expects case-insensitive matching (but then normalize to consistent casing).
+2) Handle links that include extensions or subpaths
+Some vaults store [[Old.md]] or [[Folder/Old]]. A more thorough pass:
+Build a second map with .md appended.
+When replacing, also target [[Old.md]] and [[Folder/Old]] if you know the folder didn’t change.
+3) “Plan first” switch (you already have it—use it)
+You did this right. Always start with --plan-only to sanity-check the blast radius.
+4) Indexes
+Keep --index_min_files conservative (you set 3). If you see “index.md” spam in small folders, temporarily disable --create_indexes for the first migration.
+5) Duplicate detection scope
+You’re deduping by folder. If you want cross-vault duplicates, hash across the whole vault (but that’s OK to postpone).
+
+About the YAML defaults you wanted
+You said you prefer published research as default now. Two places to enforce that:
+Vault Master (YAML ensure): when it creates YAML, set:
+publish_to:
+  production: false
+  research: true
+  template: false
+
+Preflight (normalizer): you already run with --default-site research, so missing publish_to gets coerced to research=true. That keeps downstream behavior consistent even if a note lacks YAML.
+
+Why your local site previously showed only boilerplate
+Missing index.md at docs root.
+docs_dir pointed at the wrong folder.
+Strict nav: omitted your pages.
+A plugin/frontmatter crash that silently skipped files.
+The TheoMkDocsStarter config I gave you avoids all that: minimal plugins, docs_dir: normalized, and a working index.md. Once it renders, add your theme and extra plugins incrementally.
+
+Bottom line
+Run Vault Master (plan → apply), then preflight normalize, then mkdocs serve.
+Use PowerShell rename only if you want that narrow operation instead.
+Don’t run both rename/link-update passes on the same set; pick one tool per pass.
+If you want, I can modify your Vault Master script to:
+inject your publish_to block,
+strengthen the wikilink regexes (as above),
+and add a --rename-case-insensitive flag.
+
+
+That's a solid, safe workflow. You've correctly identified the potential failure points—running redundant tools, slow iSCSI operations, and incorrect wikilink replacements.
+
+I'll apply the specific, high-value improvements you outlined to your theophysics_vault_master.py script. This will make the link updates safer and ensure your preferred publish_to defaults are injected correctly at the source.
+
+First, I need to read the script. I'll start with that.
+
+Okay, I've reviewed the script. I'll apply your requested improvements: strengthening the wikilink replacement logic and injecting your default publish_to block into the YAML creation function. These changes will make the script safer and align it with your publishing workflow.
+
+theophysics_vault_master.py
++12
+-3
+I've patched 
+theophysics_vault_master.py
+ with the safer regex-based link replacements and the default publish_to block.
+
+Summary of changes
+Safer link updates: The script now uses re.sub() with word boundaries for wikilinks ([[Link]], [[Link|Alias]]) and transclusions (![[Link]]). This prevents accidentally renaming [[Old]] inside [[Oldest]].
+Default publish flags: When the script adds new YAML frontmatter to a file, it will now automatically include your preferred publish_to block, defaulting to research: true.
+Recommended workflow (unchanged)
+Your proposed workflow is still the best path forward:
+
+Backup: Snapshot your vault first.
+Plan: Run theophysics_vault_master.py --plan-only.
+Apply: If the plan is sane, run with --apply.
+Normalize: Run 
+preflight.py
+ on the cleaned vault, outputting to a separate normalized/ directory.
+Preview: Use mkdocs serve on the normalized/ directory to ensure everything renders correctly before deploying.
+The toolkit is now more robust. You can proceed with running the vault_master script on your vault.
+
+
+
+OK that's what the AI did I just kinda want you to double check and make sure everything's on the up and up and everything kinda correctly and right before I I certainly did all these scripts
+ChatGPT said:
+Thought for 28s
+
+Got it—here’s a tight “go / no-go” review before you run anything, plus small surgical patches where I see real risk.
+
+✅ Green-light checklist (run in this order)
+
+Close Obsidian. Avoid file locks/races.
+
+Snapshot backup of the vault (folder copy) or use --backup.
+
+Vault Master (Python) – plan only:
+
+python theophysics_vault_master.py --vault "O:/THEOPHYSICS" --plan-only --log-dir "D:/vault-plans"
+
+
+Inspect vault_plan_*.md and vault_changes_*.csv.
+
+Apply (only if plan looks sane):
+
+python theophysics_vault_master.py --vault "O:/THEOPHYSICS" --backup "D:/Backups/Vault_%DATE%" --apply
+
+
+Preflight normalize to dev SSD:
+
+python pipeline/preflight.py --vault "O:/THEOPHYSICS" --out "D:/theo-normalized" --default-site research --strip-inline-tags
+
+
+Local MkDocs preview (from the starter I gave you): point docs_dir to D:/theo-normalized and run mkdocs serve.
+
+⚠️ Issues I would patch first (low risk / high value)
+1) Preflight frontmatter parser will drop block scalars (e.g., your ai_analysis_prompt: |)
+
+Your tolerant parser doesn’t handle YAML | blocks, so those multi-line values are lost. Safer approach:
+
+Try PyYAML first; if it fails, fall back to your tolerant parser (so you keep zero-dep behavior when needed).
+
+Patch (inside preflight.py) — replace parse_frontmatter with this hybrid version:
+
+def parse_frontmatter(text: str):
+    lines = text.splitlines()
+    if not lines or not FM_BOUND.match(lines[0]):
+        return {}, text
+    fm_lines, i = [], 1
+    while i < len(lines):
+        if FM_BOUND.match(lines[i]):
+            break
+        fm_lines.append(lines[i])
+        i += 1
+    body = "\n".join(lines[i+1:]) if i+1 < len(lines) else ""
+    raw = "\n".join(fm_lines)
+
+    # Try real YAML first
+    try:
+        import yaml  # PyYAML
+        fm = yaml.safe_load(raw) or {}
+        if not isinstance(fm, dict):
+            fm = {}
+        return fm, body
+    except Exception:
+        pass
+
+    # Fallback: tolerant parser (your existing logic) ...
+    fm = {}
+    current_key = None
+    for rawline in fm_lines:
+        line = rawline.rstrip("\n")
+        if not line.strip():
+            continue
+        if re.match(r'^[A-Za-z0-9_\-]+:\s*(.*)$', line):
+            key, val = line.split(':', 1)
+            key, val = key.strip(), val.strip()
+            fm[key] = val.strip('"\'')
+            current_key = key
+        elif line.strip().startswith('- '):
+            fm.setdefault(current_key, [])
+            fm[current_key].append(line.strip()[2:].strip())
+        elif line.strip().endswith(':') and not line.strip().startswith('-'):
+            current_key = line.strip()[:-1]
+            fm[current_key] = {}
+        elif current_key and isinstance(fm.get(current_key), dict) and ':' in line:
+            k, v = line.split(':', 1)
+            fm[current_key][k.strip()] = v.strip().strip('"\'')
+    return fm, body
+
+2) Tag extraction currently grabs hashtags inside code blocks
+
+Exclude fenced code when extracting tags so #tags in code snippets/URLs don’t pollute metadata.
+
+Patch (in preflight.py):
+
+FENCE = re.compile(r"```.*?```", re.S)
+
+def extract_inline_tags(body: str):
+    body_wo_code = FENCE.sub("", body)
+    return sorted(set(HASH_TAG.findall(body_wo_code)))
+
+3) Missing asset detection should handle root-relative and subfolders
+
+Your current check assumes md.parent / a. Add variants:
+
+def find_assets_paths(md_path: Path, ref: str, vault_root: Path) -> list[Path]:
+    cands = []
+    p = Path(ref)
+    if p.is_absolute():
+        cands.append(vault_root / p.relative_to("/"))
+    else:
+        cands.append(md_path.parent / p)          # relative to note
+        cands.append(vault_root / p)              # relative to vault root
+    return cands
+
+missing_assets = []
+for a in assets:
+    if not any(c.resolve().exists() for c in find_assets_paths(md, a, vault)):
+        missing_assets.append(a)
+
+4) Vault Master wikilink replacement should be regex-safe and extension-aware
+
+You mentioned you patched this—good. Make sure you also cover:
+
+[[Name.md]] form
+
+transclusions ![[Name]]
+
+case-insensitive option (Windows users often mix case)
+
+Minimal robust replace (drop-in for your loop):
+
+flags = re.IGNORECASE  # optional: make this a CLI flag
+for old, new in link_map.items():
+    pat_basic   = re.compile(rf"\[\[{re.escape(old)}\]\]", flags)
+    pat_alias   = re.compile(rf"\[\[{re.escape(old)}\|", flags)
+    pat_basic_md= re.compile(rf"\[\[{re.escape(old)}\.md\]\]", flags)
+    pat_alias_md= re.compile(rf"\[\[{re.escape(old)}\.md\|", flags)
+    pat_tr_basic= re.compile(rf"!\[\[{re.escape(old)}\]\]", flags)
+    pat_tr_alias= re.compile(rf"!\[\[{re.escape(old)}\|", flags)
+
+    new_txt = pat_basic.sub(f"[[{new}]]", new_txt)
+    new_txt = pat_alias.sub(f"[[{new}|", new_txt)
+    new_txt = pat_basic_md.sub(f"[[{new}.md]]", new_txt)
+    new_txt = pat_alias_md.sub(f"[[{new}.md|", new_txt)
+    new_txt = pat_tr_basic.sub(f"![[{new}]]", new_txt)
+    new_txt = pat_tr_alias.sub(f"![[{new}|", new_txt)
+
+5) Vault Master YAML ensure: inject your publish_to defaults
+
+Ensure new notes get your publishing stance right away:
+
+fm = {
+    'title': title,
+    'date': self.now.strftime('%Y-%m-%d'),
+    'tags': tags,
+    'category': 'theophysics-research',
+    'status': status,
+    'publish_to': { 'production': False, 'research': True, 'template': False }
+}
+
+6) Atomic writes (Windows)
+
+For any write_text, prefer atomic replace to avoid partial writes if interrupted:
+
+from tempfile import NamedTemporaryFile
+
+def atomic_write_text(path: Path, text: str, encoding="utf-8"):
+    tmp = NamedTemporaryFile("w", delete=False, encoding=encoding, dir=str(path.parent), newline="\n")
+    try:
+        tmp.write(text)
+        tmp.flush()
+        os.fsync(tmp.fileno())
+        tmp.close()
+        os.replace(tmp.name, path)
+    finally:
+        try:
+            os.unlink(tmp.name)
+        except Exception:
+            pass
+
+
+Use this in both scripts where you write markdown.
+
+Sanity commands (dry runs)
+
+Vault Master (no changes):
+
+python theophysics_vault_master.py --vault "O:/THEOPHYSICS" --plan-only --log-dir "D:/vault-plans"
+
+
+Preflight on a tiny subset first:
+
+python pipeline/preflight.py --vault "O:/THEOPHYSICS/SubfolderSample" --out "D:/theo-normalized-sample" --default-site research --strip-inline-tags
+
+
+If both look clean, scale to the full vault.
+
+Final recommendation
+
+The overall plan is solid. With the block-scalar YAML fix, code-fence aware tags, and the wikilink regex improvements, you’re in a safe place to run.
+
+Keep one tool responsible for renames+link updates per pass (either Python or PowerShell), not both.
+
+Always verify locally with the MkDocs starter before pushing to Cloudflare.
+
+If you want, tell me which patch you want me to bake directly into your files (preflight or Vault Master), and I’ll produce the exact updated files so you can drop them in and go.
+
+You said:
+Assumptions: User has an Obsidian vault with mixed YAML frontmatter; needs safe renaming, normalization, indexing, and duplicate detection before MkDocs build. Defaults: publish_to.research: true if absent. Invariants: Non-destructive (dry-run default); preserve content semantics; handle Windows/iSCSI paths. Inputs: Vault path, optional Excel/CSV mapping, backup dir. Outputs: Normalized vault copy or in-place changes (apply mode), reports (MD/CSV/JSON). Error classes: File access (PermissionError → skip/log), Mapping parse (ValueError → error list), Link ambiguity (warn, no fail).
+A2 Components
+
+vault_master.py: CLI entrypoint, orchestrates all ops.
+schema.py: YAML coercion/defaults including publish_to.
+rename.py: Mapping/auto renames, conflict resolution.
+links.py: Wikilink/transclusion updates with regex boundaries.
+yaml_ensure.py: Add/normalize frontmatter.
+index_gen.py: Create folder indexes.
+dup_detect.py: Hash-based duplicates by content.
+report.py: MD/CSV/JSON outputs.
+Data flow: Discover files → Load mapping → Plan renames/YAML/indexes → Apply (if not dry) → Update links → Detect dups → Reports.
+
+A3 Interfaces
+python@dataclass
+class Config:
+    vault: Path
+    backup_dir: Optional[Path] = None
+    mapping_path: Optional[Path] = None
+    dry_run: bool = True
+    # ... other flags as in script
+
+class VaultTool:
+    def __init__(self, cfg: Config) -> None: ...
+    def run(self) -> None: ...
+
+def parse_args() -> Config: ...
+def main(): ...
+A4 Data Model
+Change: action: str, src/dst: Optional[Path], note: str
+RenamePair: old_stem: str, new_stem: str
+Frontmatter: dict[str, Any] with defaults {'publish_to': {'production': False, 'research': True, 'template': False}, ...}
+Serialization: YAML for frontmatter (safe_dump), CSV/JSON for reports (no custom serializers needed).
+A5 Risks
+R1: iSCSI latency on large vaults → Mitigation: Advise local copy for processing; add --local-temp flag to copy vault first.
+R2: Wikilink false positives (e.g., substrings) → Use bounded regex; test with sample ambiguities.
+R3: Excel deps (pandas) optional → Guard import; fallback to CSV-only if absent.
+R4: Case insensitivity on Windows → Normalize stems to lower for mapping lookups.
+R5: Unknown: PowerShell integration → Out of scope; document as alternative for renames only.
+A6 Mini-Spec
+
+Dry-run produces plan MD/CSV without changes.
+Apply renames files per mapping/auto rules, no overwrites.
+Adds YAML with defaults including publish_to.research: true.
+Updates wikilinks/transclusions post-rename.
+Generates indexes for folders >=3 MD files.
+Detects dups by normalized content hash.
+Reports list all actions/errors/duplicates.
+Backup creates full mirror if specified.
+
+
+B1 Task Breakdown
+
+Update existing vault_master.py with improved regexes, publish_to defaults (30m).
+Extract modules: schema, rename, links, etc. from monolith (60m).
+Add --default-site flag to coerce publish_to (30m).
+Integrate with preflight.py: call as subprocess or import if in same repo (45m).
+Write tests for each module (90m).
+Docstrings + CLI help refinements (30m).
+
+B2 Files
+vault_master.py — CLI/orchestrator.
+schema.py — YAML handling.
+rename.py — Renaming logic.
+links.py — Link updates.
+index_gen.py — Index creation.
+dup_detect.py — Duplicates.
+report.py — Reporting.
+tests/test_vault.py — Unit/integ tests.
+B3 Tests
+T-1.1 → A6#1: Mock dry-run; assert plan files created, no vault changes.
+T-1.2 → A6#2: Apply rename on sample; assert new files exist, old gone.
+T-1.3 → A6#3: Add YAML to blank MD; assert publish_to.research True.
+T-1.4 → A6#4: Rename + link update; assert [[Old]] → [[New]] in other files.
+T-1.5 → A6#5: Create index in folder with 4 MDs; assert contents listed.
+T-1.6 → A6#6: Dup detection; assert same content different names grouped.
+T-1.7 → A6#7: Reports; assert MD has actions, CSV parsable.
+T-1.8 → A6#8: Backup; assert mirror dir matches vault.
+B4 Rollback
+Revert renames/links/YAML via backup restore (copy back from mirror). For indexes, delete generated index.md. Duplicates report is read-only.
+
+C1 Code
+path: vault_master.py
+python#!/usr/bin/env python3
+"""Theophysics Vault Master Tool
+... [full docstring from user script, updated]
+"""
+import argparse
+import csv
+import hashlib
+import os
+import re
+import shutil
+import sys
+import textwrap
+from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional, Set, Tuple
+
+try:
+    import yaml
+except ImportError:
+    print("PyYAML required. pip install pyyaml", file=sys.stderr)
+    sys.exit(1)
+
+try:
+    import pandas as pd
+except ImportError:
+    pd = None  # Guard Excel
+
+from schema import coerce_frontmatter  # New module
+from rename import planned_renames, apply_renames  # New
+from links import update_wikilinks  # New
+from index_gen import create_folder_index  # New
+from dup_detect import detect_duplicate_sets  # New
+from report import write_reports  # New
+
+HIDDEN_DIRS = {'.git', '.obsidian', '.trash', '.history', '.venv', '__pycache__'}
+MD_EXTS = {'.md', '.markdown'}
+
+@dataclass
+class Config:
+    vault: Path
+    backup_dir: Optional[Path] = None
+    mapping_path: Optional[Path] = None
+    dry_run: bool = True
+    include_nonmd: bool = False
+    add_yaml: bool = True
+    create_indexes: bool = True
+    detect_duplicates: bool = True
+    status_threshold_chars: int = 200
+    max_tags: int = 6
+    index_min_files: int = 3
+    update_links: bool = True
+    rename_untitled: bool = True
+    log_dir: Path = field(default_factory=Path.cwd)
+    plan_only: bool = False
+    default_site: str = "research"  # New: for publish_to default
+
+@dataclass
+class Change:
+    action: str
+    src: Optional[Path] = None
+    dst: Optional[Path] = None
+    note: str = ""
+
+class VaultTool:
+    def __init__(self, cfg: Config) -> None:
+        self.cfg = cfg
+        self.vault = cfg.vault
+        self.changes: List[Change] = []
+        self.errors: List[str] = []
+        self.file_cache: List[Path] = []
+        self.now = datetime.now()
+
+    def iter_files(self) -> List[Path]:
+        if self.file_cache:
+            return self.file_cache
+        files = []
+        for root, dirs, filenames in os.walk(self.vault):
+            dirs[:] = [d for d in dirs if d not in HIDDEN_DIRS and not d.startswith('.')]
+            for name in filenames:
+                if not self.cfg.include_nonmd:
+                    _, ext = os.path.splitext(name)
+                    if ext.lower() not in MD_EXTS:
+                        continue
+                p = Path(root) / name
+                files.append(p)
+        self.file_cache = files
+        return files
+
+    def snapshot_backup(self) -> None:
+        if not self.cfg.backup_dir:
+            return
+        if self.cfg.dry_run:
+            self.changes.append(Change("backup-planned", self.vault, self.cfg.backup_dir))
+            return
+        self.cfg.backup_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(self.vault, self.cfg.backup_dir, dirs_exist_ok=True)
+        self.changes.append(Change("backup-complete", self.vault, self.cfg.backup_dir, "Vault snapshot created"))
+
+    def run(self) -> None:
+        self.snapshot_backup()
+        files = self.iter_files()
+        renames = planned_renames(self.cfg, files)  # From rename.py
+        for src, dst in renames:
+            self.changes.append(Change("rename-plan", src, dst))
+        if self.cfg.add_yaml:
+            for p in files:
+                new_content = coerce_frontmatter(p, self.cfg.default_site)  # From schema.py
+                if new_content:
+                    if not self.cfg.dry_run:
+                        p.write_text(new_content, encoding='utf-8')
+                    self.changes.append(Change("yaml-added", p))
+        if self.cfg.create_indexes:
+            folders = {p.parent for p in files}
+            for folder in folders:
+                create_folder_index(folder, self.cfg)  # From index_gen.py
+        if not self.cfg.dry_run:
+            apply_renames(renames)
+            if self.cfg.update_links:
+                update_wikilinks(files, renames)  # From links.py
+        dups = detect_duplicate_sets(files) if not self.cfg.plan_only and self.cfg.detect_duplicates else []  # From dup_detect.py
+        write_reports(self.changes, self.errors, dups, self.cfg.log_dir, self.now)  # From report.py
+
+def parse_args() -> Config:
+    # [updated with --default-site str]
+    parser = argparse.ArgumentParser(...)
+    # ... [full from user, plus new flag]
+    parser.add_argument("--default-site", default="research", choices=["production", "research", "template"])
+    # ...
+    args = parser.parse_args()
+    cfg = Config(...)  # Map args
+    return cfg
+
+def main():
+    cfg = parse_args()
+    tool = VaultTool(cfg)
+    tool.run()
+    print("Done. See reports in:", cfg.log_dir)
+
+if __name__ == "__main__":
+    main()
+path: schema.py
+pythonimport re
+import yaml
+from pathlib import Path
+from typing import Optional
+
+DEFAULTS = {
+    'publish_to': {'production': False, 'research': True, 'template': False},
+    'title': '',  # Derived
+    'date': '',   # Derived
+    # ... full from user YAML template
+}
+
+def coerce_frontmatter(path: Path, default_site: str) -> Optional[str]:
+    """Add/normalize YAML with defaults.
+    
+    Example:
+    >>> coerce_frontmatter(sample.md, 'research')  # Adds YAML if missing
+    """
+    try:
+        content = path.read_text('utf-8')
+    except Exception as e:
+        return None
+    if content.startswith('---'):
+        end = content.find('---', 3)
+        if end != -1:
+            fm_str = content[3:end].strip()
+            fm = yaml.safe_load(fm_str) or {}
+            content = content[end+3:].lstrip()
+    else:
+        fm = {}
+    if 'publish_to' not in fm:
+        fm['publish_to'] = DEFAULTS['publish_to']
+    # Coerce types, apply defaults...
+    if not fm.get('title'):
+        m = re.search(r'^# \s+(.+)', content, re.M)
+        fm['title'] = m.group(1).strip() if m else path.stem.title()
+    # ... similar for others
+    yaml_header = '---\n' + yaml.safe_dump(fm, sort_keys=False) + '---\n\n'
+    return yaml_header + content
+path: rename.py
+pythonimport re
+from pathlib import Path
+from typing import List, Tuple
+
+def planned_renames(cfg, files: List[Path]) -> List[Tuple[Path, Path]]:
+    """Plan renames from mapping/auto rules.
+    
+    Example:
+    >>> planned_renames(cfg, [Path('Untitled.md')])  # Suggests new name
+    """
+    renames = []
+    # Load mapping as in user script...
+    # Auto rules...
+    return renames
+
+def apply_renames(renames: List[Tuple[Path, Path]]) -> None:
+    for src, dst in renames:
+        src.rename(dst)
+path: links.py
+pythonimport re
+from pathlib import Path
+from typing import List, Tuple
+
+def update_wikilinks(files: List[Path], renames: List[Tuple[Path, Path]]) -> None:
+    """Update [[Old]] / ![[Old]] / [[Old|Label]] safely.
+    
+    Example:
+    >>> update_wikilinks([other.md], [(old.md, new.md)])  # Replaces bounded
+    """
+    link_map = {src.stem: dst.stem for src, dst in renames}
+    for p in files:
+        txt = p.read_text('utf-8')
+        new_txt = txt
+        for old, new in link_map.items():
+            new_txt = re.sub(rf"\[\[{re.escape(old)}\]\]", f"[[{new}]]", new_txt)
+            new_txt = re.sub(rf"\[\[{re.escape(old)}\|", f"[[{new}|", new_txt)
+            new_txt = re.sub(rf"!\[\[{re.escape(old)}\]\]", f"![[{new}]]", new_txt)
+            new_txt = re.sub(rf"!\[\[{re.escape(old)}\|", f"![[{new}|", new_txt)
+        if new_txt != txt:
+            p.write_text(new_txt, 'utf-8')
+path: index_gen.py
+pythonfrom pathlib import Path
+
+def create_folder_index(folder: Path, cfg) -> None:
+    """Generate index.md if enough files.
+    
+    Example:
+    >>> create_folder_index(folder_with_4mds, cfg)
+    """
+    # As in user script...
+path: dup_detect.py
+pythonimport hashlib
+import re
+from pathlib import Path
+from typing import List
+
+def detect_duplicate_sets(files: List[Path]) -> List[List[Path]]:
+    """Group by normalized content hash.
+    
+    Example:
+    >>> detect_duplicate_sets([dup1.md, dup2.md])  # Groups them
+    """
+    hashes = {}
+    for p in files:
+        txt = p.read_text('utf-8')
+        if txt.startswith('---'):
+            end = txt.find('---', 3)
+            txt = txt[end+3:] if end != -1 else txt
+        norm = re.sub(r'\s+', ' ', txt.strip().lower())
+        h = hashlib.md5(norm.encode()).hexdigest()
+        hashes.setdefault(h, []).append(p)
+    return [group for group in hashes.values() if len(group) > 1]
+path: report.py
+pythonimport csv
+import json
+from datetime import datetime
+from pathlib import Path
+from typing import List, Optional
+
+def write_reports(changes: List[Change], errors: List[str], dups: List[List[Path]], log_dir: Path, now: datetime) -> None:
+    """Write MD/CSV/JSON reports.
+    
+    Example:
+    >>> write_reports([...], [...], [...], log_dir, now)
+    """
+    ts = now.strftime("%Y%m%d_%H%M%S")
+    plan_md = log_dir / f"vault_plan_{ts}.md"
+    with plan_md.open('w', 'utf-8') as f:
+        f.write("# Vault Plan\n")
+        # ... as in user
+    changes_csv = log_dir / f"vault_changes_{ts}.csv"
+    with changes_csv.open('w', 'utf-8', newline='') as f:
+        w = csv.writer(f)
+        w.writerow(["action", "src", "dst", "note"])
+        for ch in changes:
+            w.writerow([ch.action, str(ch.src or ""), str(ch.dst or ""), ch.note])
+    dup_json = log_dir / f"vault_duplicates_{ts}.json"
+    with dup_json.open('w', 'utf-8') as f:
+        json.dump({"sets": [[str(p) for p in group] for group in dups]}, f, indent=2)
+    # Add errors to plan_md...
+C2 Tests
+path: tests/test_vault.py
+pythonimport pytest
+from pathlib import Path
+from vault_master import VaultTool, Config, Change
+from schema import coerce_frontmatter
+# ... imports
+
+@pytest.fixture
+def tmp_vault(tmp_path):
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    (vault / "note.md").write_text("# Title\nContent")
+    (vault / "old.md").write_text("[[untitled]]")
+    (vault / "untitled.md").write_text("Draft")
+    return vault
+
+def test_dry_run(tmp_vault):
+    cfg = Config(vault=tmp_vault, dry_run=True)
+    tool = VaultTool(cfg)
+    tool.run()
+    assert any(c.action == "rename-plan" for c in tool.changes)
+    assert (tmp_vault / "untitled.md").exists()  # No change
+
+def test_apply_rename(tmp_vault):
+    cfg = Config(vault=tmp_vault, dry_run=False, rename_untitled=True)
+    tool = VaultTool(cfg)
+    tool.run()
+    assert not (tmp_vault / "untitled.md").exists()
+    assert any((tmp_vault / f).exists() for f in tmp_vault.glob("draft.md"))  # Suggested name
+
+# ... similar for each T-1.x
+C3 Dev Notes
+Install: pip install pyyaml pandas pytest
+Run: python vault_master.py --vault /path --apply
+Expected: Reports in CWD; vault updated if apply.
+CLI example: python vault_master.py --vault O:/THEOPHYSICS --default-site research --backup D:/backup --apply
+
+D1 Config
+VAULT_PATH (required): Obsidian root.
+BACKUP_DIR (optional): Mirror destination.
+MAPPING_FILE (optional): Excel/CSV path.
+DEFAULT_SITE=research: publish_to default.
+.env.example:
+VAULT_PATH=O:/THEOPHYSICS
+DEFAULT_SITE=research
+D2 Logging & Metrics
+JSON lines to stdout: {"timestamp": ISO, "level": "info/error", "event": "rename", "details": {...}}
+Sampling: All events logged; no sampling.
+D3 Limits
+Timeouts: None (local ops).
+Retries: None (file ops idempotent).
+Budgets: Max files processed=10k (add check if needed).
+D4 Security & Privacy
+Secrets: No API keys.
+PII: Assume vault content non-sensitive; no redaction.
+D5 Packaging
+requirements.txt
+pyyaml>=6.0
+pandas>=2.0
+pytest>=7.0
+pyproject.toml
+[tool.poetry]
+name = "theophysics-vault-master"
+version = "0.1.0"
+...
+Makefile:
+setup: pip install -r requirements.txt
+test: pytest
+run: python vault_master.py --vault $(VAULT_PATH)
+
+E1 Integration Map
+Call site: In preflight.py, after vault walk: import vault_master; tool = VaultTool(cfg_from_preflight); tool.run()  # Or subprocess.
+E2 Adapters
+No shims needed; share Path-based interfaces.
+E3 Migration
+
+Copy existing vault_master.py to repo.
+Refactor into modules as in C1.
+Run dry-run on sample vault.
+No data backfill (non-destructive).
+
+E4 Compatibility
+Python 3.9+; Windows/Linux (Path handles).
+
+F1 Static Checks
+Complexity: rename.py O(n), low. No dead code. Lint: black/flake8 clean.
+F2 Performance
+Big-O: O(files) for walk/ops; worst-case 10k files ~10s. Optimizable: Parallel file reads if needed.
+F3 Failure Injection
+Timeouts: N/A local.
+Empty inputs: Empty vault → empty reports, no crash.
+Bad config: Invalid path → error list, exit 1.
+F4 Acceptance
+
+A6#1: ✅ T-1.1 passes.
+A6#2: ✅ T-1.2 passes.
+A6#3: ✅ T-1.3 passes.
+A6#4: ✅ T-1.4 passes.
+A6#5: ✅ T-1.5 passes.
+A6#6: ✅ T-1.6 passes.
+A6#7: ✅ T-1.7 passes.
+A6#8: ✅ T-1.8 passes.
+
+F5 Changelog
+
+feat: Modularized script, added publish_to defaults.
+fix: Improved wikilink regex for boundaries/transclusions.
+fix: Case-insensitive mapping option.
+ChatGPT said:
+
+Sharp read. Your A→F spec is solid and the direction is right, but a few concrete gaps will bite you if you “just run it.” Here’s a precise go/no-go with surgical fixes.
+
+Go / No-Go (TL;DR)
+
+NO-GO to run end-to-end right now. A few module stubs and interface mismatches will fail at runtime.
+
+GO after the 9 fixes below. They’re small, local, and remove the remaining foot-guns.
+
+9 Critical Fixes (copy/paste ready)
+1) preflight.py — preserve YAML block scalars (|)
+
+Your tolerant parser will drop ai_analysis_prompt: | blocks. Use a hybrid parser:
+
+# preflight.py
+def parse_frontmatter(text: str):
+    lines = text.splitlines()
+    if not lines or not FM_BOUND.match(lines[0]):
+        return {}, text
+    fm_lines, i = [], 1
+    while i < len(lines) and not FM_BOUND.match(lines[i]):
+        fm_lines.append(lines[i]); i += 1
+    body = "\n".join(lines[i+1:]) if i+1 < len(lines) else ""
+    raw = "\n".join(fm_lines)
+
+    # Try real YAML first
+    try:
+        import yaml
+        fm = yaml.safe_load(raw) or {}
+        return fm if isinstance(fm, dict) else {}, body
+    except Exception:
+        pass
+
+    # Fallback: (keep your tolerant parser here)
+    ...
+
+2) preflight.py — don’t collect tags inside code fences
+FENCE = re.compile(r"```.*?```", re.S)
+def extract_inline_tags(body: str):
+    body_wo_code = FENCE.sub("", body)
+    return sorted(set(HASH_TAG.findall(body_wo_code)))
+
+3) preflight.py — asset detection should try more than md.parent / ref
+
+Add root-relative and subpath candidates:
+
+def _candidate_asset_paths(md_path: Path, ref: str, vault_root: Path):
+    p = Path(ref)
+    if p.is_absolute():
+        yield vault_root / p.relative_to("/")
+    else:
+        yield md_path.parent / p
+        yield vault_root / p
+
+missing_assets = []
+for ref in assets:
+    if not any(c.exists() for c in _candidate_asset_paths(md, ref, vault)):
+        missing_assets.append(ref)
+
+4) Vault Master — inject publish_to defaults when adding YAML
+
+In ensure_yaml:
+
+fm = {
+    'title': title,
+    'date': self.now.strftime('%Y-%m-%d'),
+    'tags': tags,
+    'category': 'theophysics-research',
+    'status': status,
+    'publish_to': {'production': False, 'research': True, 'template': False},
+}
+
+5) Vault Master — safe wikilink updates (bounded, .md, transclusions, optional CI)
+
+Replace your .replace() loop with:
+
+flags = re.IGNORECASE  # or make CLI flag
+for old, new in link_map.items():
+    pats = [
+        (rf"\[\[{re.escape(old)}\]\]",           f"[[{new}]]"),
+        (rf"\[\[{re.escape(old)}\|",             f"[[{new}|"),
+        (rf"\[\[{re.escape(old)}\.md\]\]",       f"[[{new}.md]]"),
+        (rf"\[\[{re.escape(old)}\.md\|",         f"[[{new}.md|"),
+        (rf"!\[\[{re.escape(old)}\]\]",          f"![[{new}]]"),
+        (rf"!\[\[{re.escape(old)}\|",            f"![[{new}|"),
+    ]
+    for pat, repl in pats:
+        new_txt = re.sub(pat, repl, new_txt, flags=flags)
+
+6) Atomic writes on Windows to avoid partial files
+
+Utility:
+
+from tempfile import NamedTemporaryFile
+def atomic_write_text(path: Path, text: str, encoding="utf-8"):
+    tmp = NamedTemporaryFile("w", delete=False, encoding=encoding, dir=str(path.parent), newline="\n")
+    try:
+        tmp.write(text); tmp.flush(); os.fsync(tmp.fileno()); tmp.close()
+        os.replace(tmp.name, path)
+    finally:
+        try: os.unlink(tmp.name)
+        except: pass
+
+
+Use this for all writes (p.write_text(...) → atomic_write_text(p, ...)).
+
+7) Module wiring — interfaces currently don’t line up
+
+Right now vault_master.py imports functions (planned_renames, apply_renames, etc.) that are stubs. Either finish the modules or keep a monolith. If you keep modules:
+
+rename.py must accept (cfg, files) and return List[Tuple[Path,Path]].
+
+links.py should accept (files, renames, case_insensitive: bool=False).
+
+schema.py’s coerce_frontmatter(path, default_site) must return the full updated text (including YAML) or None if unchanged.
+
+report.py must not depend on a Change class unless you import/type it there.
+
+8) Tests — fix obvious placeholders so pytest -q can run
+
+test_apply_rename: you assert a glob into a variable that’s never computed. Replace with a direct existence check of the new file name you expect (or assert “one file with stem changed exists”).
+
+Add one small test for the block-scalar preservation and code-fence tag exclusion.
+
+9) CLI — add --default-site to Vault Master (it’s in your spec)
+
+In parse_args():
+
+parser.add_argument("--default-site", default="research",
+    choices=["production","research","template"],
+    help="Default publish_to site if missing")
+
+
+and store on Config.default_site, actually used by your YAML logic.
+
+Minimal “sanity” sequence (dry first)
+# 0) Close Obsidian
+# 1) Backup (optional but recommended)
+robocopy "O:\THEOPHYSICS" "D:\Backups\THEOPHYSICS_YYYYMMDD" /MIR
+
+# 2) Vault Master — dry run
+python theophysics_vault_master.py --vault "O:/THEOPHYSICS" --plan-only --log-dir "D:/vault-plans"
+
+# 3) If plan looks sane, apply (with on-disk backup too)
+python theophysics_vault_master.py --vault "O:/THEOPHYSICS" --backup "D:/Backups/VM_SNAPSHOT_YYYYMMDD" --apply
+
+# 4) Preflight normalize to dev SSD
+python pipeline/preflight.py --vault "O:/THEOPHYSICS" --out "D:/theo-normalized" --default-site research --strip-inline-tags
+
+# 5) Local MkDocs preview
+cd TheoMkDocsStarter
+# either copy D:\theo-normalized into ./normalized or set docs_dir
+mkdocs serve
+
+Acceptance matrix (quick)
+
+A6#1 Dry-run plan → vault_plan_*.md + CSV generated, no files changed.
+
+A6#2 Renames → target files renamed, no overwrite, conflicts get suffix -1, -2.
+
+A6#3 YAML added → new YAML contains publish_to.research: true.
+
+A6#4 Links updated → [[Old]], [[Old|…]], ![[Old]] replaced; [[Oldest]] untouched.
+
+A6#5 Indexes → only in folders with ≥3 MD files; existing index.md respected.
+
+A6#6 Duplicates → groups reported; no deletions.
+
+A6#7 Reports → MD + CSV + JSON present and parsable.
+
+A6#8 Backup → mirror exists and is complete.
+
+Judgment call
+
+Your plan is coherent; the remaining issues are small but important.
+
+Apply the 9 patches, run dry, then apply. That will keep you out of the “HTML loads but no notes” trap and avoid YAML/regex corner cases.
+
+Want me to output patched files (updated preflight.py and the Vault Master link/YAML changes) so you can drop them in and run immediately?
