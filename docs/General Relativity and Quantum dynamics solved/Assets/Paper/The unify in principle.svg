@@ -1,0 +1,83 @@
+<svg viewBox="0 0 1400 900" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="80%">
+      <stop offset="0%" stop-color="#0e1020"></stop>
+      <stop offset="40%" stop-color="#151a33"></stop>
+      <stop offset="100%" stop-color="#0b0f23"></stop>
+    </radialGradient>
+    <radialGradient id="chiGlow" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#bfaeff" stop-opacity="0.95"></stop>
+      <stop offset="50%" stop-color="#8f86ff" stop-opacity="0.45"></stop>
+      <stop offset="100%" stop-color="#7a73ff" stop-opacity="0.15"></stop>
+    </radialGradient>
+    <marker id="arrowCyan" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 9 3, 0 6" fill="#4ecdc4"></polygon>
+    </marker>
+    <marker id="arrowTeal" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 9 3, 0 6" fill="#a8e6cf"></polygon>
+    </marker>
+  </defs>
+
+  <rect width="1400" height="900" fill="url(#bg)"></rect>
+
+  <!-- Title -->
+  <text x="700" y="80" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold" font-size="38" fill="#eef1ff">
+    THE UNIFYING PRINCIPLE
+  </text>
+  <text x="700" y="112" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#cdd6ff">
+    Isomorphism and the Master Equation
+  </text>
+
+  <!-- Left: GR panel -->
+  <g transform="translate(100,220)">
+    <rect x="0" y="0" width="380" height="460" rx="14" fill="#1b1f3e" stroke="#4ecdc4" stroke-opacity="0.6"></rect>
+    <text x="190" y="36" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" fill="#4ecdc4">General Relativity</text>
+    <path d="M40,320 C140,200 240,200 340,320" stroke="#4ecdc4" stroke-width="3" fill="none"></path>
+    <circle cx="190" cy="280" r="30" fill="#4ecdc4" fill-opacity="0.4" stroke="#4ecdc4"></circle>
+    <text x="190" y="285" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#4ecdc4">G,R</text>
+    <text x="190" y="420" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#cfd6ff">
+      Spacetime curvature shaped by will
+    </text>
+  </g>
+
+  <!-- Right: QD panel -->
+  <g transform="translate(920,220)">
+    <rect x="0" y="0" width="380" height="460" rx="14" fill="#1b1f3e" stroke="#a8e6cf" stroke-opacity="0.6"></rect>
+    <text x="190" y="36" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" fill="#a8e6cf">Quantum Dynamics</text>
+    <path d="M40,280 C90,220 140,340 190,280 C240,220 290,340 340,280" stroke="#a8e6cf" stroke-width="3" fill="none"></path>
+    <circle cx="120" cy="310" r="10" fill="#a8e6cf"></circle>
+    <circle cx="260" cy="310" r="10" fill="#a8e6cf"></circle>
+    <text x="190" y="280" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#a8e6cf">F,Q</text>
+    <text x="190" y="420" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#dff9f2">
+      Probabilistic potential collapsed by faith
+    </text>
+  </g>
+
+  <!-- Center: χ-field lens -->
+  <g transform="translate(700,450)">
+    <circle cx="0" cy="0" r="160" fill="url(#chiGlow)"></circle>
+    <circle cx="0" cy="0" r="162" fill="none" stroke="#dcd8ff" stroke-opacity="0.7"></circle>
+    <text x="0" y="-12" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold" font-size="56" fill="#0b0f23">χ</text>
+    <text x="0" y="20" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#0b0f23">
+      Master Equation
+    </text>
+    <text x="0" y="42" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#0b0f23">
+      χ = ∫[(G·C·R)/S]·(F·Q) dV dt
+    </text>
+  </g>
+
+  <!-- Arrows into χ -->
+  <line x1="480" y1="450" x2="540" y2="450" stroke="#4ecdc4" stroke-width="3" marker-end="url(#arrowCyan)"></line>
+  <line x1="920" y1="450" x2="860" y2="450" stroke="#a8e6cf" stroke-width="3" marker-end="url(#arrowTeal)"></line>
+
+  <!-- Footer band -->
+  <g transform="translate(200,770)">
+    <rect x="0" y="0" width="1000" height="80" rx="14" fill="#151a33" stroke="#7a73ff" stroke-opacity="0.6"></rect>
+    <text x="500" y="32" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#dfe4ff">
+      GR-forms and QD-forms are isomorphic mappings
+    </text>
+    <text x="500" y="56" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" fill="#bfc8ff">
+      Both are projections of one conscious informational field
+    </text>
+  </g>
+</svg>

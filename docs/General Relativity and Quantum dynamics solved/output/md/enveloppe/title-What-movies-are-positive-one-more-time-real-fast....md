@@ -1,0 +1,17 @@
+---
+category: theophysics-research
+date: '2025-09-28'
+publish_to:
+  production: false
+  research: true
+  template: false
+status: published
+tags:
+- o
+- theophysics
+- enveloppe
+title: '- What movies are positive one more time real fast oh yeah d...'
+---
+   
+   
+- What movies are positive one more time real fast oh yeah dude I'm going to teach you how to do it all but always a way to not do it in Photoshop here is faithful facts and I'll teach you how to do everything dude but I wrote all in Adobe No no no like some of this stuff okay here's the background template but you've got the scripts you need the scripts written out right or some of them I don't throw anything away because let's go take a look at the potatoes expand but instead of doing so far we can we can let's just go five so we get that mountain top generative fill generate now it's going to repeat and it knows there's a mountain right so instead of just having clouds everywhere we're going to have where it looks like he's above something which would be kind of cool I think we'll see you look like he's kind of standing on a mountain though I think that I think this one I agree out of those three years so what I do is then I'll take this I'll turn off I'll go in here and I will put it's been a while each of these this is the black and white light here is one on that I did on Gideon this is the beatitudes I can turn off that No that's up there dynamic feedback from tik toks and like this person did this at this time or something so what I do now a couple of things I have to go in here and on whichever one I'm on that's what I do okay so this was the last one I did I don't want to jack with I want to turn that off because this is Proverbs 3 through 5 and I don't want to mess with Proverbs 3 through 5 right so what I do is I take this I duplicate it go here and I'll call this whatever my new one is Jesus okay and then I'll take this put it in there go here and then let's see whatever is there when I turn that on it just needs to be like behind there and then excuse me is like this one is the Gideon one or not Jesus here is Gideon or if I turn off Gideon I've got the beatitudes and then I'll just I'll turn on his picture but these so then I take the image of whatever it is here's my one for angels something at the bottom yeah okay it's just it's just empty oh the bottom stuff is put on there by TikTok that's right so up here I put where I get it in the template it just says questions taken from the New testament about angels but in this one on creation questions taken from Genesis chapters 1 and 2 so you have an idea and all of these images are rendered and it's just called faithful facts creation and then but I go in here oh and then I download the videos so like here is my one on creation
