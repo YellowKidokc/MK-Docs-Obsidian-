@@ -1,0 +1,76 @@
+site_name: Theophysics Research Vault
+site_description: Complete working vault for internal and collaborative studies
+site_author: David Lowe
+site_url: https://theophysics-template.pages.dev
+theme:
+  name: material
+  custom_dir: theme/lantana-terminal
+  language: en
+  palette:
+  - scheme: slate
+    primary: black
+    accent: teal
+  features:
+  - navigation.tabs
+  - navigation.sections
+  - navigation.top
+  - search.highlight
+  - search.share
+  - toc.integrate
+markdown_extensions:
+- pymdownx.caret
+- pymdownx.mark
+- pymdownx.tilde
+- pymdownx.snippets
+- pymdownx.superfences
+- pymdownx.highlight
+- pymdownx.inlinehilite
+- pymdownx.blocks.details:
+    types:
+    - name: info
+      class: terminal-alert
+      title: Info
+    - name: warning
+      class: terminal-alert terminal-alert-error
+      title: Warning
+    - name: important
+      class: terminal-alert terminal-alert-primary
+      title: Important
+- def_list
+- footnotes
+- tables
+- toc
+- attr_list
+- md_in_html
+- pymdownx.arithmatex:
+    generic: true
+plugins:
+- search
+- tags
+- awesome-pages
+- git-revision-date
+- macros:
+    include_dir: macros
+- minify:
+    minify_html: true
+    minify_js: true
+    minify_css: true
+nav:
+- Home: index.md
+- Tags: tags.md
+- Research: research/index.md
+- AI Collab: ai-collab/index.md
+- Data: data/index.md
+- Tools: tools/index.md
+extra:
+  site_kind: research
+  tagline: Full-stack knowledge base for David Lowe and collaborators
+extra_css:
+- stylesheets/custom.css
+- stylesheets/audio-player.css
+- stylesheets/terminal-overrides.css
+extra_javascript:
+- javascripts/site-meta.js
+- javascripts/mathjax.js
+- javascripts/audio-controls.js
+- javascripts/terminal-effects.js
