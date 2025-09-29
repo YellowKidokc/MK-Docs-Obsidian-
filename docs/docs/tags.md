@@ -1,3 +1,0 @@
-# Tags
-
-{% raw %}{{ tags }}{% endraw %}

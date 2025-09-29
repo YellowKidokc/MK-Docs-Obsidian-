@@ -1,4 +1,0 @@
-extends: material
-name: lantana-terminal
-static_templates:
-  - 404.html
