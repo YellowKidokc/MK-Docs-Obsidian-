@@ -1,0 +1,106 @@
+:root {
+  --tp-background: #0f111a;
+  --tp-surface: #161a24;
+  --tp-border: rgba(255, 255, 255, 0.08);
+  --tp-accent: #32c8ff;
+  --tp-accent-secondary: #7d5cff;
+  --tp-text: #f4f6fb;
+  --tp-muted: #9aa0b5;
+}
+
+body {
+  background-color: var(--tp-background);
+  color: var(--tp-text);
+}
+
+.md-header, .md-tabs {
+  background: linear-gradient(135deg, rgba(16, 20, 32, 0.95), rgba(22, 24, 34, 0.95));
+  border-bottom: 1px solid var(--tp-border);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+}
+
+.md-nav__title, .md-nav__item a {
+  color: var(--tp-muted);
+}
+
+.md-nav__item--active > a {
+  color: var(--tp-accent);
+}
+
+.md-footer {
+  background: rgba(10, 12, 18, 0.98);
+  border-top: 1px solid var(--tp-border);
+}
+
+.md-typeset a {
+  color: var(--tp-accent);
+}
+
+.md-typeset a:hover {
+  color: var(--tp-accent-secondary);
+}
+
+.md-typeset h1, .md-typeset h2, .md-typeset h3 {
+  color: var(--tp-text);
+  border-bottom: 1px solid rgba(50, 200, 255, 0.15);
+  padding-bottom: 0.3rem;
+}
+
+.md-typeset blockquote {
+  border-left: 4px solid var(--tp-accent-secondary);
+  background: rgba(125, 92, 255, 0.08);
+  color: var(--tp-text);
+}
+
+.md-search {
+  max-width: 26rem;
+}
+
+.tp-header-meta {
+  background: rgba(7, 9, 14, 0.85);
+  border-top: 1px solid var(--tp-border);
+  border-bottom: 1px solid var(--tp-border);
+  padding: 0.35rem 1rem;
+  display: flex;
+  justify-content: center;
+}
+
+.tp-header-terminal {
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 0.85rem;
+  color: var(--tp-accent);
+  letter-spacing: 0.03em;
+}
+
+.tp-header-terminal .separator {
+  color: var(--tp-muted);
+  margin: 0 0.4rem;
+}
+
+.tp-header-terminal .command {
+  color: var(--tp-text);
+}
+
+.md-grid {
+  max-width: 1200px;
+}
+
+.md-typeset code {
+  background: rgba(16, 20, 32, 0.9);
+  color: #e7f5ff;
+  border: 1px solid rgba(50, 200, 255, 0.15);
+}
+
+.md-typeset pre > code {
+  border-radius: 0.4rem;
+}
+
+.md-typeset hr {
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+@media screen and (max-width: 720px) {
+  .tp-header-terminal {
+    font-size: 0.75rem;
+  }
+}
