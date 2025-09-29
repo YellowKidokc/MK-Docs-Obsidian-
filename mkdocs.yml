@@ -37,9 +37,6 @@ markdown_extensions:
 
 plugins:
   - search
-  - roamlinks
 
 nav:
   - Home: index.md
-  - THEOPHYSICS: theophysics/
-  - About: about.md

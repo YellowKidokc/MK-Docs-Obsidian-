@@ -25,3 +25,4 @@ Rigorous analysis showing statistical correlation between quantum decoherence ac
 *"The boundary between physics and metaphysics is dissolving, revealing a deeper unity underlying all reality."*
 
 **David Carter** | THEOPHYSICS Research | Oklahoma City, 2025
+
