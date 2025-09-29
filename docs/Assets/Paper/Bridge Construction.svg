@@ -1,0 +1,83 @@
+<svg viewBox="0 0 1400 900" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="80%">
+      <stop offset="0%" stop-color="#0e1020"></stop>
+      <stop offset="40%" stop-color="#10162a"></stop>
+      <stop offset="100%" stop-color="#0b0d1a"></stop>
+    </radialGradient>
+  </defs>
+
+  <rect width="1400" height="900" fill="url(#bg)"></rect>
+
+  <!-- Stars -->
+  <g fill="#9aa3c0" opacity="0.5">
+    <circle cx="120" cy="90" r="1.5"></circle><circle cx="220" cy="60" r="1.2"></circle>
+    <circle cx="360" cy="110" r="1.2"></circle><circle cx="520" cy="70" r="1.4"></circle>
+    <circle cx="860" cy="80" r="1.2"></circle><circle cx="1040" cy="55" r="1.4"></circle>
+    <circle cx="1250" cy="95" r="1.6"></circle><circle cx="1320" cy="150" r="1.1"></circle>
+  </g>
+
+  <!-- Title -->
+  <text x="700" y="85" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold" font-size="40" fill="#e8ecff">BRIDGE CONSTRUCTION</text>
+  <text x="700" y="120" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#b7c0dd">Connecting Quantum and Relativistic Theories</text>
+
+  <!-- Left landscape (Quantum) -->
+  <g transform="translate(80,520)">
+    <path d="M0,120 L300,0 L380,60 L420,40 L480,120 Z" fill="#1b1742"></path>
+    <polygon points="60,20 120,140 0,140" fill="#3a2a7a"></polygon>
+    <polygon points="170,0 240,140 100,140" fill="#5b41b1" opacity="0.9"></polygon>
+    <circle cx="40" cy="-40" r="10" fill="#9d8fe8"></circle><circle cx="210" cy="-60" r="8" fill="#9d8fe8"></circle>
+    <path d="M40,10 q40,-20 80,0 q40,20 80,0" fill="none" stroke="#bfaef6" stroke-width="2" opacity="0.6"></path>
+    <text x="0" y="180" font-family="Arial, sans-serif" font-size="14" fill="#b7c0dd">Nanometer to micrometer scale</text>
+  </g>
+  <text x="170" y="240" font-family="Arial, sans-serif" font-size="24" fill="#bda8ff">QUANTUM REALM</text>
+
+  <!-- Right landscape (Relativistic) -->
+  <g transform="translate(900,540)">
+    <path d="M0,100 C120,40 240,40 360,100 L360,140 L0,140 Z" fill="#221b4a"></path>
+    <ellipse cx="60" cy="-30" rx="22" ry="16" fill="#f3c86b"></ellipse>
+    <ellipse cx="140" cy="-10" rx="36" ry="22" fill="#d3a956"></ellipse>
+    <ellipse cx="220" cy="-25" rx="28" ry="18" fill="#b8924c"></ellipse>
+    <ellipse cx="300" cy="0" rx="46" ry="26" fill="#8b6e3a"></ellipse>
+    <text x="40" y="180" font-family="Arial, sans-serif" font-size="14" fill="#e6c983">Kilometers to light-years scale</text>
+  </g>
+  <text x="1160" y="240" font-family="Arial, sans-serif" font-size="24" fill="#e6c983">RELATIVISTIC REALM</text>
+
+  <!-- Bridge piers -->
+  <rect x="330" y="420" width="36" height="240" fill="#50546a"></rect>
+  <rect x="1034" y="420" width="36" height="240" fill="#50546a"></rect>
+
+  <!-- Arches -->
+  <path d="M348,420 C520,220 880,220 1052,420" fill="none" stroke="#676c83" stroke-width="16"></path>
+  <path d="M348,420 C560,260 840,260 1052,420" fill="none" stroke="#3c4156" stroke-width="6" stroke-dasharray="18 12" opacity="0.6"></path>
+
+  <!-- Mid cart / unknown -->
+  <g transform="translate(670,340)">
+    <rect x="-30" y="0" width="60" height="38" rx="6" fill="#70768f"></rect>
+    <circle cx="-14" cy="38" r="6" fill="#42475e"></circle><circle cx="14" cy="38" r="6" fill="#42475e"></circle>
+    <text x="0" y="26" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#0b0d1a">?</text>
+  </g>
+  <circle cx="660" cy="350" r="6" fill="#d5d8f4"></circle><circle cx="740" cy="350" r="6" fill="#d5d8f4"></circle>
+
+  <!-- Scale ticks under arches -->
+  <g stroke="#40465e" stroke-width="2">
+    <line x1="470" y1="360" x2="470" y2="460"></line>
+    <line x1="525" y1="330" x2="525" y2="460"></line>
+    <line x1="580" y1="315" x2="580" y2="460"></line>
+    <line x1="820" y1="315" x2="820" y2="460"></line>
+    <line x1="875" y1="330" x2="875" y2="460"></line>
+    <line x1="930" y1="360" x2="930" y2="460"></line>
+  </g>
+
+  <!-- Mini inset -->
+  <g transform="translate(620,720)">
+    <rect x="0" y="0" width="160" height="110" rx="6" fill="none" stroke="#6e78a6"></rect>
+    <text x="80" y="22" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#9fb4ff">Theories</text>
+    <path d="M10,70 Q80,30 150,70" fill="none" stroke="#8fd0ff"></path>
+    <text x="28" y="90" font-family="Arial, sans-serif" font-size="10" fill="#a7aedd">Loop QG</text>
+    <text x="118" y="90" font-family="Arial, sans-serif" font-size="10" fill="#ffd17e">Holographic</text>
+  </g>
+
+  <!-- Footer quote -->
+  <text x="700" y="860" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#d7dcff">"Building Bridges Between Incompatible Theories"</text>
+</svg>
