@@ -84,3 +84,5 @@ nav:
       - EOW Schema: data/eow-schema.md
   - About: about.md
   - Tags: tags.md
+  - Deployment Guides:
+      - Physics of Faith Gallery: physics-of-faith-gallery-setup.md
