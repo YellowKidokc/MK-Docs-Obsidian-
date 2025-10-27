@@ -1,0 +1,371 @@
+/* ================================================
+   Obsidian Bible Vault - Progressive Disclosure CSS
+   ================================================
+
+   This CSS creates three layers of information:
+   1. Clean reading (default)
+   2. Entity highlights (on hover)
+   3. Detailed information (on click)
+*/
+
+/* ================================================
+   LAYER 1: Clean Reading View
+   ================================================ */
+
+.bible-reading-view {
+    font-family: var(--font-text);
+    font-size: 1.1em;
+    line-height: 1.8;
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 2em;
+}
+
+.verse-number {
+    font-size: 0.75em;
+    color: var(--text-muted);
+    vertical-align: super;
+    margin-right: 0.3em;
+    cursor: pointer;
+    user-select: none;
+}
+
+.verse-number:hover {
+    color: var(--text-accent);
+}
+
+.verse-text {
+    display: inline;
+    cursor: default;
+}
+
+/* ================================================
+   LAYER 2: Entity Highlights (on hover/enabled)
+   ================================================ */
+
+/* Entity markers - only show when "layer-2-enabled" class is added to body */
+body.layer-2-enabled .verse-text[data-entities],
+body.layer-2-enabled .verse-text[data-topics] {
+    position: relative;
+}
+
+/* Subtle underline for verses with entities */
+body.layer-2-enabled .verse-text[data-entities]::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg,
+        transparent 0%,
+        var(--text-accent-hover) 20%,
+        var(--text-accent-hover) 80%,
+        transparent 100%
+    );
+    opacity: 0.3;
+}
+
+/* Highlight on hover */
+body.layer-2-enabled .verse-text[data-entities]:hover {
+    background-color: var(--background-secondary);
+    padding: 0.1em 0.2em;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+}
+
+/* ================================================
+   LAYER 3: Detailed Information
+   ================================================ */
+
+.verse-details {
+    background: var(--background-secondary);
+    border-left: 3px solid var(--text-accent);
+    padding: 1em 1.5em;
+    margin: 0.5em 0 1em 2em;
+    border-radius: 0 5px 5px 0;
+    font-size: 0.95em;
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.verse-details h4 {
+    margin-top: 0;
+    color: var(--text-accent);
+    font-size: 0.9em;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.verse-details ul {
+    margin: 0.5em 0;
+    padding-left: 1.5em;
+}
+
+.verse-details li {
+    margin: 0.3em 0;
+}
+
+/* ================================================
+   SIDEBAR LAYOUTS
+   ================================================ */
+
+/* Custom layout for Bible chapters with sidebars */
+.bible-chapter-layout {
+    display: grid;
+    grid-template-columns: 250px 1fr 250px;
+    gap: 2em;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.bible-chapter-layout .main-content {
+    grid-column: 2;
+}
+
+.bible-chapter-layout .sidebar-left {
+    grid-column: 1;
+    position: sticky;
+    top: 1em;
+    height: fit-content;
+}
+
+.bible-chapter-layout .sidebar-right {
+    grid-column: 3;
+    position: sticky;
+    top: 1em;
+    height: fit-content;
+}
+
+/* Sidebar styling */
+.sidebar-left,
+.sidebar-right {
+    background: var(--background-secondary);
+    padding: 1em;
+    border-radius: 8px;
+    font-size: 0.9em;
+}
+
+.sidebar-left h3,
+.sidebar-right h3 {
+    font-size: 0.85em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-top: 0;
+}
+
+.sidebar-section {
+    margin-bottom: 1.5em;
+}
+
+.sidebar-section:last-child {
+    margin-bottom: 0;
+}
+
+/* ================================================
+   ZOOM MODE (Deep Dive)
+   ================================================ */
+
+body.zoom-mode .bible-reading-view {
+    max-width: none;
+}
+
+body.zoom-mode .verse-details {
+    display: block !important;
+    margin: 1em 0;
+}
+
+body.zoom-mode .verse-text {
+    font-size: 1.2em;
+    line-height: 2;
+}
+
+/* ================================================
+   ENTITY TYPE INDICATORS
+   ================================================ */
+
+/* Different colors for different entity types */
+.verse-text[data-entities*="PER"] {
+    border-bottom: 2px dotted rgba(52, 152, 219, 0.4); /* Blue for people */
+}
+
+.verse-text[data-entities*="PLA"] {
+    border-bottom: 2px dotted rgba(46, 204, 113, 0.4); /* Green for places */
+}
+
+.verse-text[data-topics] {
+    border-bottom: 2px dotted rgba(241, 196, 15, 0.4); /* Yellow for topics */
+}
+
+/* ================================================
+   RESPONSIVE DESIGN
+   ================================================ */
+
+@media (max-width: 1200px) {
+    .bible-chapter-layout {
+        grid-template-columns: 200px 1fr 200px;
+        gap: 1em;
+    }
+}
+
+@media (max-width: 900px) {
+    .bible-chapter-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .bible-chapter-layout .sidebar-left,
+    .bible-chapter-layout .sidebar-right {
+        position: static;
+        grid-column: 1;
+    }
+}
+
+/* ================================================
+   INTERACTIVE CONTROLS
+   ================================================ */
+
+/* Layer toggle buttons */
+.layer-controls {
+    position: fixed;
+    top: 60px;
+    right: 20px;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    padding: 0.5em;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+    z-index: 100;
+}
+
+.layer-toggle-btn {
+    padding: 0.5em 1em;
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: all 0.2s ease;
+}
+
+.layer-toggle-btn:hover {
+    background: var(--background-modifier-hover);
+}
+
+.layer-toggle-btn.active {
+    background: var(--text-accent);
+    color: white;
+    border-color: var(--text-accent);
+}
+
+/* ================================================
+   TRANSLATION SELECTOR
+   ================================================ */
+
+.translation-selector {
+    margin-bottom: 2em;
+    text-align: center;
+}
+
+.translation-selector select {
+    padding: 0.5em 1em;
+    font-size: 1em;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 5px;
+    background: var(--background-secondary);
+    color: var(--text-normal);
+    cursor: pointer;
+}
+
+/* ================================================
+   CUSTOM ANIMATIONS
+   ================================================ */
+
+/* Smooth transitions for layer changes */
+.verse-text {
+    transition: background-color 0.2s ease,
+                padding 0.2s ease;
+}
+
+.verse-details {
+    transition: max-height 0.3s ease,
+                opacity 0.3s ease;
+}
+
+/* ================================================
+   PRINT STYLES
+   ================================================ */
+
+@media print {
+    .layer-controls,
+    .sidebar-left,
+    .sidebar-right,
+    .translation-selector {
+        display: none;
+    }
+
+    .bible-reading-view {
+        max-width: none;
+        padding: 0;
+    }
+
+    .verse-details {
+        page-break-inside: avoid;
+    }
+}
+
+/* ================================================
+   DARK MODE OVERRIDES
+   ================================================ */
+
+.theme-dark .verse-details {
+    background: rgba(255, 255, 255, 0.05);
+    border-left-color: var(--text-accent);
+}
+
+.theme-dark .verse-text[data-entities]:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* ================================================
+   ACCESSIBILITY
+   ================================================ */
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+    .verse-text[data-entities]::after {
+        opacity: 1;
+        height: 2px;
+    }
+
+    .verse-number {
+        font-weight: bold;
+    }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Focus styles for keyboard navigation */
+.verse-number:focus,
+.verse-text:focus {
+    outline: 2px solid var(--text-accent);
+    outline-offset: 2px;
+}
